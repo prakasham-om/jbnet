@@ -1,0 +1,11 @@
+[
+  {
+    "origin": [
+      "*",
+      "https://code-seven-jet.vercel.app/"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Authorization", "x-goog-meta-password"]
+  }
+]
