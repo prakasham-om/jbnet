@@ -17,8 +17,7 @@ const AdminDashboard = () => {
   const [summary, setSummary] = useState({ 
     totalUsers: 0, 
     revenue: 0, 
-    completedTasks: 0 ,
-    permanentRevenue: 0,
+    completedTasks: 0 
   });
   const [selectedDate, setSelectedDate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,7 +34,7 @@ const AdminDashboard = () => {
       if (selectedDate) params.date = selectedDate;
       if (searchTerm) params.search = searchTerm;
 
-      const res = await axios.get("https://jbnet.onrender.com/api/admin/users", { params });
+      const res = await axios.get("https://code-3oqu.onrender.com/api/admin/users", { params });
       setUsers(res.data);
     } catch (err) {
       console.error("Fetch Users Error:", err);
@@ -46,7 +45,7 @@ const AdminDashboard = () => {
 
   const fetchSummary = async () => {
     try {
-      const res = await axios.get("https://jbnet.onrender.com/api/admin/summary");
+      const res = await axios.get("https://code-3oqu.onrender.com/api/admin/summary");
       setSummary(res.data);
     } catch (err) {
       console.error("Fetch Summary Error:", err);
@@ -55,7 +54,7 @@ const AdminDashboard = () => {
 
   const handleCompleteTask = async (userId, fileIndex) => {
     try {
-      await axios.put(`https://jbnet.onrender.com/api/admin/user/${userId}/file/${fileIndex}`, {
+      await axios.put(`https://code-3oqu.onrender.com/api/admin/user/${userId}/file/${fileIndex}`, {
         status: "Completed",
       });
       fetchUsers();
@@ -74,13 +73,13 @@ const AdminDashboard = () => {
     formData.append("adminMessage", "Uploaded by admin");
 
     try {
-      const uploadRes = await axios.post("https://jbnet.onrender.com/api/upload", formData, {
+      const uploadRes = await axios.post("https://code-3oqu.onrender.com/api/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data"
         }
       });
       const url = uploadRes.data.url || uploadRes.data.fileUrl;
-      await axios.put(`https://jbnet.onrender.com/api/admin/user/${userId}/file/${fileIndex}`, {
+      await axios.put(`https://code-3oqu.onrender.com/api/admin/user/${userId}/file/${fileIndex}`, {
         adminFileUrl: url,
       });
       fetchUsers();
@@ -93,7 +92,7 @@ const AdminDashboard = () => {
   const handleDeleteFile = async (userId, fileIndex) => {
     if (window.confirm("Are you sure you want to delete this file? This action cannot be undone.")) {
       try {
-        await axios.delete(`https://jbnet.onrender.com/api/admin/user/${userId}/file/${fileIndex}`);
+        await axios.delete(`https://code-3oqu.onrender.com/api/admin/user/${userId}/file/${fileIndex}`);
         
         // Update UI without refetching all data
         if (activePage === "userDetail" && selectedUser?._id === userId) {
@@ -114,7 +113,7 @@ const AdminDashboard = () => {
   const handleDeleteUser = async (userId) => {
     if (window.confirm("Are you sure you want to delete this user and all their files? This action cannot be undone.")) {
       try {
-        await axios.delete(`https://jbnet.onrender.com/api/admin/user/${userId}`);
+        await axios.delete(`https://code-3oqu.onrender.com/api/admin/user/${userId}`);
         
         if (activePage === "userDetail" && selectedUser?._id === userId) {
           setActivePage("dashboard");
@@ -322,7 +321,7 @@ const AdminDashboard = () => {
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen text-gray-800">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold">📊 </h1>
+        <h1 className="text-2xl font-bold">📊 Admin Dashboard</h1>
         <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="date"
@@ -330,7 +329,7 @@ const AdminDashboard = () => {
             onChange={(e) => setSelectedDate(e.target.value)}
             className="border px-3 py-1.5 rounded-lg shadow-sm text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-          <input-MediaStream
+          <input
             type="text"
             placeholder="Search users..."
             value={searchTerm}
