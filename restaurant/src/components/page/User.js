@@ -62,7 +62,7 @@ const UserDashboard = () => {
       setUploads((prev) => [...prev, ...res.data.uploads]);
       alert("Uploaded successfully");
     } catch (error) {
-      alert("Upload failed",error.message);
+      alert("Upload failed",error);
       console.error("Upload error:", error);
     }
 
