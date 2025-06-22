@@ -10,7 +10,7 @@ const fileSchema = new mongoose.Schema({
   status: { type: String, default: "Pending" },           // Pending / Completed
   uploadedAt: { type: Date, default: Date.now },          // file upload date
   adminMessage: { type: String },                         // admin comment
-  adminFileUrl: { type: String },                         // file uploaded by admin
+  adminFileUrl: { type: String },                        // file uploaded by admin
 });
 
 const userSchema = new mongoose.Schema({
