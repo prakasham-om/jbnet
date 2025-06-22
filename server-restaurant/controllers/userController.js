@@ -2,22 +2,17 @@
 const User = require("../model/User");
 const { uploadToCloudinary } = require("../util/cloudnary");
 
+// Upload files without token-based auth
 exports.uploadFiles = async (req, res) => {
-  const { docType, password, vehicleNo, udCardNo } = req.body;
-  console.log(req.body.email)
-  const files = req.files;
-
-
-  if (!req.body.email) {
-    return res.status(401).json({ error: "Unauthorized: Missing user token" });
-  }
-
-  if (!docType || !files || files.length === 0) {
-    return res.status(400).json({ error: "Missing document type or files" });
-  }
-
   try {
-  
+    const { docType, password, vehicleNo, udCardNo, email, uid, name, picture } = req.body;
+    const files = req.files;
+
+    if (!email) return res.status(401).json({ error: "Missing email" });
+    if (!docType || !files || files.length === 0) {
+      return res.status(400).json({ error: "Missing document type or files" });
+    }
+
     const uploads = await Promise.all(
       files.map(async (file) => {
         const result = await uploadToCloudinary(file.buffer, "user_uploads");
@@ -28,21 +23,19 @@ exports.uploadFiles = async (req, res) => {
           password,
           vehicleNo,
           udCardNo,
-          date: new Date(),
+          uploadedAt: new Date(),
           status: "Uploaded",
         };
       })
     );
 
-
-    let user = await User.findOne({ email: req.body.email });
-
+    let user = await User.findOne({ email });
     if (!user) {
       user = new User({
-        googleId: req.body.uid,
-        name: req.body.name || "Unknown User",
-        email: req.body.email,
-        photoURL: req.body.picture || "",
+        googleId: uid || "unknown",
+        name: name || "Unknown",
+        email,
+        photoURL: picture || "",
         files: uploads,
       });
     } else {
@@ -50,23 +43,53 @@ exports.uploadFiles = async (req, res) => {
     }
 
     await user.save();
-
     res.json({ message: "Upload successful", uploads });
   } catch (err) {
-    console.error("Upload error:", err.message);
-    res.status(500).json({ error: err.message || "Failed to upload files" });
+    console.error("Upload error:", err);
+    res.status(500).json({ error: "Upload failed", details: err.message });
   }
 };
 
+// Get files uploaded by user
 exports.getUserUploads = async (req, res) => {
   try {
-    if (!req.user || !req.user.email) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: "Missing email" });
 
-    const user = await User.findOne({ email: req.user.email });
+    const user = await User.findOne({ email });
     res.json(user?.files || []);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch uploads" });
+  }
+};
+
+// Admin posts a new file for a user
+exports.postAdminFile = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { adminMessage } = req.body;
+    const file = req.file;
+
+    if (!file) return res.status(400).json({ error: "No file provided" });
+
+    const result = await uploadToCloudinary(file.buffer, "admin_files");
+    const user = await User.findById(userId);
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.files.push({
+      docType: "Admin Upload",
+      fileName: file.originalname,
+        adminFileUrl :result.secure_url,
+      adminMessage,
+      uploadedAt: new Date(),
+      status: "Completed",
+    });
+
+    await user.save();
+    res.json({ message: "Admin file uploaded", fileUrl: result.secure_url });
+  } catch (err) {
+    console.error("Admin upload error:", err);
+    res.status(500).json({ error: "Admin file upload failed", details: err.message });
   }
 };
