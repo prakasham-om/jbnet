@@ -35,7 +35,7 @@ const AdminDashboard = () => {
       if (selectedDate) params.date = selectedDate;
       if (searchTerm) params.search = searchTerm;
 
-      const res = await axios.get("http://localhost:5000/api/admin/users", { params });
+      const res = await axios.get("https://jbnet.onrender.com/api/admin/users", { params });
       setUsers(res.data);
     } catch (err) {
       console.error("Fetch Users Error:", err);
@@ -46,7 +46,7 @@ const AdminDashboard = () => {
 
   const fetchSummary = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/admin/summary");
+      const res = await axios.get("https://jbnet.onrender.com/api/admin/summary");
       setSummary(res.data);
     } catch (err) {
       console.error("Fetch Summary Error:", err);
@@ -55,7 +55,7 @@ const AdminDashboard = () => {
 
   const handleCompleteTask = async (userId, fileIndex) => {
     try {
-      await axios.put(`http://localhost:5000/api/admin/user/${userId}/file/${fileIndex}`, {
+      await axios.put(`https://jbnet.onrender.com/api/admin/user/${userId}/file/${fileIndex}`, {
         status: "Completed",
       });
       fetchUsers();
@@ -74,13 +74,13 @@ const AdminDashboard = () => {
     formData.append("adminMessage", "Uploaded by admin");
 
     try {
-      const uploadRes = await axios.post("http://localhost:5000/api/upload", formData, {
+      const uploadRes = await axios.post("https://jbnet.onrender.com/api/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data"
         }
       });
       const url = uploadRes.data.url || uploadRes.data.fileUrl;
-      await axios.put(`http://localhost:5000/api/admin/user/${userId}/file/${fileIndex}`, {
+      await axios.put(`https://jbnet.onrender.com/api/admin/user/${userId}/file/${fileIndex}`, {
         adminFileUrl: url,
       });
       fetchUsers();
@@ -93,7 +93,7 @@ const AdminDashboard = () => {
   const handleDeleteFile = async (userId, fileIndex) => {
     if (window.confirm("Are you sure you want to delete this file? This action cannot be undone.")) {
       try {
-        await axios.delete(`http://localhost:5000/api/admin/user/${userId}/file/${fileIndex}`);
+        await axios.delete(`https://jbnet.onrender.com/api/admin/user/${userId}/file/${fileIndex}`);
         
         // Update UI without refetching all data
         if (activePage === "userDetail" && selectedUser?._id === userId) {
@@ -114,7 +114,7 @@ const AdminDashboard = () => {
   const handleDeleteUser = async (userId) => {
     if (window.confirm("Are you sure you want to delete this user and all their files? This action cannot be undone.")) {
       try {
-        await axios.delete(`http://localhost:5000/api/admin/user/${userId}`);
+        await axios.delete(`https://jbnet.onrender.com/api/admin/user/${userId}`);
         
         if (activePage === "userDetail" && selectedUser?._id === userId) {
           setActivePage("dashboard");

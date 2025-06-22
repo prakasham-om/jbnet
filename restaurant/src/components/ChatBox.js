@@ -19,7 +19,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   useEffect(() => {
     if (!userEmail) return;
 
-    socketRef.current = io("http://localhost:5000/api/message", {
+    socketRef.current = io("https://jbnet.onrender.com/api/message", {
       withCredentials: true,
       transports: ["polling"],
       upgrade: false,
@@ -35,7 +35,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
         const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
 
         const res = await fetch(
-          `http://localhost:5000/api/messages?user1=${sender}&user2=${receiver}`
+          `https://jbnet.onrender.com/api/messages?user1=${sender}&user2=${receiver}`
         );
         const data = await res.json();
 
@@ -89,7 +89,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
     };
 
     try {
-      const response = await fetch("http://localhost:5000/api/messages", {
+      const response = await fetch("https://jbnet.onrender.com/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(messageData),
@@ -109,7 +109,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
 
     try {
       setIsDeleting(true);
-      await fetch(`http://localhost:5000/api/messages/${messageId}`, {
+      await fetch(`https://jbnet.onrender.com/api/messages/${messageId}`, {
         method: "DELETE",
       });
 
