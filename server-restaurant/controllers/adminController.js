@@ -91,6 +91,7 @@ exports.deleteUserFile = async (req, res) => {
 };
 
 // ADMIN: Delete a user and all their files
+
 exports.deleteUser = async (req, res) => {
   const { userId } = req.params;
 

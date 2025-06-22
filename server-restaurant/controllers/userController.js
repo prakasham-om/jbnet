@@ -54,7 +54,7 @@ exports.uploadFiles = async (req, res) => {
     res.json({ message: "Upload successful", uploads });
   } catch (err) {
     console.error("Upload error:", err.message);
-    res.status(500).json({ error: "Upload failed" });
+    res.status(500).json({ error: err.message || "Failed to upload files" });
   }
 };
 
