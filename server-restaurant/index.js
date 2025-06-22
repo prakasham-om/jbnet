@@ -18,8 +18,8 @@ const server = http.createServer(app);
 app.use(cors({
   origin: 'https://jbnet.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // <- Add 'PUT' here
-  allowedHeaders: ['Content-Type', 'Authorization'], // Adjust if needed
-  credentials: true, // If you're using cookies or auth headers
+//allowedHeaders: ['Content-Type', 'Authorization'], // Adjust if needed
+ //redentials: true, // If you're using cookies or auth headers
 }));
 app.use(express.json());
 
