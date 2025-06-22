@@ -13,7 +13,7 @@ const app = express();
 const server = http.createServer(app);
 
 // Frontend URL
-const FRONTEND_URL = "https://jbnet.vercel.app/"
+const FRONTEND_URL = "https://jbnet.vercel.app"
 
 // Middleware
 app.use(cors({
