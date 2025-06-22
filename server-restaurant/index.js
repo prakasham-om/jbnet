@@ -12,14 +12,14 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// Frontend URL
-const FRONTEND_URL = "https://jbnet.vercel.app"
+
 
 // Middleware
 app.use(cors({
-  origin: FRONTEND_URL,
-  methods: ["GET", "POST", "DELETE"],
-  credentials: true
+  origin: 'https://jbnet.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // <- Add 'PUT' here
+  allowedHeaders: ['Content-Type', 'Authorization'], // Adjust if needed
+  credentials: true, // If you're using cookies or auth headers
 }));
 app.use(express.json());
 
