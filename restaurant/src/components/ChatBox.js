@@ -230,7 +230,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Type your message..."
-            className="flex-1 px-4 py-3 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="flex-1 px-3  py-3 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
           <motion.button
             whileTap={{ scale: 0.9 }}
