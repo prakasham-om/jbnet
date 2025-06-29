@@ -14,7 +14,7 @@ const fileSchema = new mongoose.Schema({
 });
 
 const userSchema = new mongoose.Schema({
-  googleId: { type: String },
+  googleId: { type: String ,unique: true },
   name: { type: String },
   email: { type: String, required: true, unique: true },
   photoURL: { type: String },
