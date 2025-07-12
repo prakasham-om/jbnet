@@ -12,15 +12,28 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  'https://jbnet.vercel.app',
+  'http://localhost:3000', // for local testing
+  'https://code-seven-jet.vercel.app/'
+];
 
-
-// Middleware
 app.use(cors({
-  origin: 'https://jbnet.vercel.app',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // <- Add 'PUT' here
-//allowedHeaders: ['Content-Type', 'Authorization'], // Adjust if needed
- //redentials: true, // If you're using cookies or auth headers
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
 }));
+
+
+
 app.use(express.json());
 
 // API Routes
