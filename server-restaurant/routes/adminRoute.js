@@ -20,6 +20,12 @@ const adminController = require("../controllers/adminController");
 // ------------------------------
 // Get All Users (with filters)
 // ------------------------------
+
+router.put(
+  "/admin/user/:userId/file/:fileIndex/complete",
+  // isAdmin,
+  adminController.completeUserFile
+);
 router.get("/admin/users", adminController.getUsers);
 // Example: /api/admin/users?date=2025-06-19&search=alice
 
