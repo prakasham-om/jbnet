@@ -12,31 +12,32 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// 🔥 Correct Allowed Origins
 const allowedOrigins = [
-  'https://jbnet.vercel.app',
-  'http://localhost:3000', // for local testing
-  'https://code-seven-jet.vercel.app/'
+  "https://jbnet.vercel.app",
+  "http://localhost:3000",
+  "https://code-seven-jet.vercel.app"
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true,
-}));
-
-
+// ---------------- CORS for API ----------------
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // postman/mobile etc
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 
-// API Routes
+// ---------------- ROUTES ----------------
 const adminRoutes = require("./routes/adminRoute");
 const userRoutes = require("./routes/userRoute");
 const chatRoutes = require("./routes/chatRoutes");
@@ -45,42 +46,43 @@ app.use("/api", adminRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/messages", chatRoutes);
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  const PORT = process.env.PORT || 5000;
-  server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-}).catch(err => console.error("❌ MongoDB connection error:", err));
+// ---------------- DATABASE ----------------
+mongoose
+  .connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => {
+    const PORT = process.env.PORT || 5000;
+    server.listen(PORT, () =>
+      console.log(`✅ Server running on port ${PORT}`)
+    );
+  })
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// Socket.IO Setup
+// ---------------- SOCKET.IO ----------------
 const io = new Server(server, {
   cors: {
-    origin: FRONTEND_URL,
+    origin: allowedOrigins, // 🔥 FIXED HERE
     methods: ["GET", "POST"],
-    credentials: true
+    credentials: true,
   },
-  transports: ['polling', 'websocket']
+  transports: ["polling", "websocket"],
 });
 
-const connected = {}; // email -> socket.id
+const connected = {}; // email => socketId
 
 io.on("connection", (socket) => {
   console.log("🟢 Socket connected:", socket.id);
 
-  // Track user connection
   socket.on("join", ({ email }) => {
     connected[email] = socket.id;
-    console.log(`📲 ${email} joined chat`);
+    console.log(`📲 ${email} joined`);
   });
 
-  // Receive and save message
+  // Send and Save Message
   socket.on("send_message", async ({ sender, receiver, message }) => {
-    if (!sender || !receiver || !message) {
-      console.log("❌ Missing chat data");
-      return;
-    }
+    if (!sender || !receiver || !message) return;
 
     try {
       const encryptedMessage = encrypt(message);
@@ -89,46 +91,48 @@ io.on("connection", (socket) => {
         sender,
         receiver,
         encryptedMessage,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       await newMsg.save();
-      console.log("💾 Encrypted message saved:", newMsg);
-
-      // Emit decrypted message to receiver
-      const receiverSocketId = connected[receiver];
-      const senderSocketId = connected[sender];
 
       const payload = {
         _id: newMsg._id,
         sender,
         receiver,
         message,
-        timestamp: newMsg.timestamp
+        timestamp: newMsg.timestamp,
       };
 
-      if (receiverSocketId) io.to(receiverSocketId).emit("receive_message", payload);
-      if (senderSocketId) io.to(senderSocketId).emit("receive_message", payload);
+      if (connected[receiver])
+        io.to(connected[receiver]).emit("receive_message", payload);
 
+      if (connected[sender])
+        io.to(connected[sender]).emit("receive_message", payload);
     } catch (err) {
       console.error("❌ Failed to save message:", err.message);
     }
   });
 
-  // Handle message deletion
+  // Delete Message
   socket.on("delete_message", async ({ messageId, sender, receiver }) => {
     try {
       await Message.findByIdAndDelete(messageId);
-      if (connected[sender]) io.to(connected[sender]).emit("message_deleted", messageId);
-      if (connected[receiver]) io.to(connected[receiver]).emit("message_deleted", messageId);
+
+      if (connected[sender])
+        io.to(connected[sender]).emit("message_deleted", messageId);
+
+      if (connected[receiver])
+        io.to(connected[receiver]).emit("message_deleted", messageId);
     } catch (err) {
       console.error("❌ Failed to delete message:", err.message);
     }
   });
 
-  // Handle disconnection
   socket.on("disconnect", () => {
-    const email = Object.keys(connected).find(e => connected[e] === socket.id);
+    const email = Object.keys(connected).find(
+      (e) => connected[e] === socket.id
+    );
     if (email) delete connected[email];
     console.log("🔴 Socket disconnected:", socket.id);
   });
