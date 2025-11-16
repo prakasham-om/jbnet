@@ -19,16 +19,18 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   useEffect(() => {
     if (!userEmail) return;
 
-    socketRef.current = io("https://jbnet.onrender.com/api/message", {
+    // ✅ FIX: Correct Socket URL (NO /api/message)
+    socketRef.current = io("https://jbnet.onrender.com", {
       withCredentials: true,
-      transports: ["polling"],
-      upgrade: false,
+      transports: ["websocket", "polling"],
     });
 
     const socket = socketRef.current;
 
+    // join room
     socket.emit("join", { email: userEmail });
 
+    // Fetch previous messages
     const fetchMessages = async () => {
       try {
         const sender = isAdmin ? ADMIN_EMAIL : userEmail;
@@ -37,14 +39,9 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
         const res = await fetch(
           `https://jbnet.onrender.com/api/messages?user1=${sender}&user2=${receiver}`
         );
-        const data = await res.json();
 
-        if (Array.isArray(data)) {
-          setMessages(data);
-        } else {
-          console.error("Expected array, got:", data);
-          setMessages([]);
-        }
+        const data = await res.json();
+        setMessages(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Chat load failed:", err);
         setMessages([]);
@@ -53,14 +50,20 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
 
     fetchMessages();
 
+    // Receive new message
     socket.on("receive_message", (msg) => {
       const sender = isAdmin ? ADMIN_EMAIL : userEmail;
       const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
-      if ((msg.sender === sender && msg.receiver === receiver) || (msg.sender === receiver && msg.receiver === sender)) {
+
+      if (
+        (msg.sender === sender && msg.receiver === receiver) ||
+        (msg.sender === receiver && msg.receiver === sender)
+      ) {
         setMessages((prev) => [...prev, msg]);
       }
     });
 
+    // Receive delete event
     socket.on("message_deleted", (deletedId) => {
       setMessages((prev) => prev.filter((msg) => msg._id !== deletedId));
     });
@@ -76,6 +79,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Send message
   const handleSend = async () => {
     if (!newMessage.trim()) return;
 
@@ -97,25 +101,35 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
 
       const savedMessage = await response.json();
       setMessages((prev) => [...prev, savedMessage]);
+
+      // Send to socket
       socketRef.current?.emit("send_message", savedMessage);
+
       setNewMessage("");
     } catch (err) {
       console.error("Failed to send message:", err);
     }
   };
 
+  // Delete message
   const handleDeleteMessage = async (messageId) => {
     if (!window.confirm("Are you sure you want to delete this message?")) return;
 
     try {
       setIsDeleting(true);
+
       await fetch(`https://jbnet.onrender.com/api/messages/${messageId}`, {
         method: "DELETE",
       });
 
       const sender = isAdmin ? ADMIN_EMAIL : userEmail;
       const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
-      socketRef.current?.emit("delete_message", { messageId, sender, receiver });
+
+      socketRef.current?.emit("delete_message", {
+        messageId,
+        sender,
+        receiver,
+      });
 
       setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
     } catch (err) {
@@ -183,9 +197,16 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
             </div>
           ) : (
             messages.map((msg) => {
-              const isSender = msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail);
+              const isSender =
+                msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail);
+
               return (
-                <div key={msg._id} className={`flex ${isSender ? "justify-end" : "justify-start"}`}>
+                <div
+                  key={msg._id}
+                  className={`flex ${
+                    isSender ? "justify-end" : "justify-start"
+                  }`}
+                >
                   <div className="max-w-[85%]">
                     <div
                       className={`px-4 py-2 rounded-2xl shadow text-sm relative group ${
@@ -195,19 +216,27 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
                       }`}
                     >
                       <p className="whitespace-pre-wrap">{msg.message}</p>
+
                       <div className="flex justify-between items-center mt-1">
-                        <p className={`text-[10px] opacity-70 ${isSender ? 'text-blue-100' : 'text-gray-500'}`}>
+                        <p
+                          className={`text-[10px] opacity-70 ${
+                            isSender ? "text-blue-100" : "text-gray-500"
+                          }`}
+                        >
                           {new Date(msg.timestamp).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </p>
+
                         {(isAdmin || isSender) && (
                           <button
                             onClick={() => handleDeleteMessage(msg._id)}
                             disabled={isDeleting}
                             className={`ml-2 opacity-0 group-hover:opacity-70 transition-opacity ${
-                              isDeleting ? 'cursor-not-allowed' : 'hover:opacity-100'
+                              isDeleting
+                                ? "cursor-not-allowed"
+                                : "hover:opacity-100"
                             }`}
                           >
                             <IoTrash size={12} />
@@ -220,6 +249,7 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
               );
             })
           )}
+
           <div ref={chatEndRef} />
         </div>
 
@@ -230,8 +260,9 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Type your message..."
-            className="flex-1 px-3  py-3 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="flex-1 px-3 py-3 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
+
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={handleSend}
