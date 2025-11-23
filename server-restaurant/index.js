@@ -1,150 +1,175 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const http = require("http");
-const { Server } = require("socket.io");
-const cors = require("cors");
-const dotenv = require("dotenv");
-const { encrypt, decrypt } = require("./util/cryptoUtil");
-const Message = require("./model/Chat");
+import React, { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
+import { IoSend, IoClose } from "react-icons/io5";
+import io from "socket.io-client";
 
-dotenv.config();
+const socket = io("https://code-fsue.vercel.app");
 
-const app = express();
-const server = http.createServer(app);
+const ADMIN_EMAIL = "rohitsahoo866@gmail.com";
 
-// ---------------- ALLOWED ORIGINS ----------------
-const allowedOrigins = [
-  "https://jbnet.vercel.app",          // your frontend
-  "https://code-seven-jet.vercel.app", // old frontend (optional)
-  "http://localhost:3000"
-];
+const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+  const chatEndRef = useRef(null);
 
-// ---------------- CORS FOR EXPRESS API ----------------
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // mobile/postman etc.
+  const storedUser = JSON.parse(localStorage.getItem("user"));
+  const userEmail = isAdmin ? propUserEmail : storedUser?.email;
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, origin);             // IMPORTANT FIX
-      } else {
-        callback(new Error("Not allowed by CORS"));
+  useEffect(() => {
+    if (!userEmail) return;
+
+    socket.emit("join", { email: userEmail });
+
+    const fetchMessages = async () => {
+      try {
+        const sender = isAdmin ? ADMIN_EMAIL : userEmail;
+        const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
+
+        const res = await fetch(
+          `https://code-fsue.vercel.app/api/messages?user1=${sender}&user2=${receiver}`
+        );
+        const data = await res.json();
+        setMessages(data);
+      } catch (err) {
+        console.error("Chat load failed:", err);
       }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  })
-);
+    };
 
-app.use(express.json());
+    fetchMessages();
 
-// ---------------- ROUTES ----------------
-const adminRoutes = require("./routes/adminRoute");
-const userRoutes = require("./routes/userRoute");
-const chatRoutes = require("./routes/chatRoutes");
+    // Listen for incoming socket messages
+    socket.on("receive_message", (msg) => {
+      setMessages((prev) => [...prev, msg]);
+    });
 
-app.use("/api", adminRoutes);
-app.use("/api/user", userRoutes);
-app.use("/api/messages", chatRoutes);
+    return () => {
+      socket.off("receive_message");
+    };
+  }, [userEmail, isAdmin]);
 
-// ---------------- DATABASE ----------------
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => {
-    const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () =>
-      console.log(`✅ Server running on port ${PORT}`)
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!newMessage.trim()) return;
+
+    const sender = isAdmin ? ADMIN_EMAIL : userEmail;
+    const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
+
+    const messageData = {
+      sender,
+      receiver,
+      message: newMessage.trim(),
+    };
+
+    // Emit to socket
+    socket.emit("send_message", messageData);
+
+    // Optimistic UI
+    setMessages((prev) => [
+      ...prev,
+      {
+        ...messageData,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+    setNewMessage("");
+  };
+
+  if (!userEmail) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded shadow text-red-500 text-sm">
+          ❌ Unable to identify user. Please login again.
+          <button
+            onClick={onClose}
+            className="mt-4 block text-blue-600 hover:underline"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     );
-  })
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
+  }
 
-// ---------------- SOCKET.IO ----------------
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,   // MUST be an array — DO NOT use function here
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-  transports: ["polling", "websocket"],
-});
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      ></div>
 
-const connectedUsers = {}; // email → socketId
+      <div className="absolute sm:bottom-6 sm:right-6 bottom-1/2 left-1/2 sm:left-auto sm:translate-x-0 translate-x-[-50%] translate-y-1/2 sm:translate-y-0 z-50">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-[90vw] sm:w-[360px] h-[80vh] sm:h-[500px] bg-white shadow-2xl rounded-xl flex flex-col overflow-hidden"
+        >
+          <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
+            <span className="font-medium text-sm">
+              💬 Chat {isAdmin ? `with ${userEmail}` : "with Admin"}
+            </span>
+            <button onClick={onClose}>
+              <IoClose size={20} />
+            </button>
+          </div>
 
-io.on("connection", (socket) => {
-  console.log("🟢 Socket connected:", socket.id);
+          <div className="flex-1 overflow-y-auto p-4 bg-blue-50 space-y-2 text-sm">
+            {messages.length === 0 ? (
+              <p className="text-center text-gray-500 italic">No messages yet.</p>
+            ) : (
+              messages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`flex ${
+                    msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[70%] px-3 py-2 rounded-lg shadow-sm ${
+                      msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
+                        ? "bg-green-500 text-white"
+                        : "bg-white text-gray-800 border"
+                    }`}
+                  >
+                    <p>{msg.message}</p>
+                    <p className="text-[10px] text-right mt-1 opacity-70">
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+            <div ref={chatEndRef} />
+          </div>
 
-  // ---------------- JOIN USER ----------------
-  socket.on("join", ({ email }) => {
-    connectedUsers[email] = socket.id;
-    console.log(`📲 User joined: ${email}`);
-  });
+          <div className="border-t bg-white p-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Type your message..."
+              className="flex-1 px-3 py-2 text-sm border rounded-md"
+            />
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleSend}
+              className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700"
+            >
+              <IoSend size={18} />
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
 
-  // ---------------- SEND MESSAGE ----------------
-  socket.on("send_message", async ({ sender, receiver, message }) => {
-    if (!sender || !receiver || !message) return;
-
-    try {
-      const encryptedMessage = encrypt(message);
-
-      const newMsg = new Message({
-        sender,
-        receiver,
-        encryptedMessage,
-        timestamp: new Date(),
-      });
-
-      await newMsg.save();
-
-      const payload = {
-        _id: newMsg._id,
-        sender,
-        receiver,
-        message,
-        timestamp: newMsg.timestamp,
-      };
-
-      // send to receiver if connected
-      if (connectedUsers[receiver]) {
-        io.to(connectedUsers[receiver]).emit("receive_message", payload);
-      }
-
-      // also send to sender
-      if (connectedUsers[sender]) {
-        io.to(connectedUsers[sender]).emit("receive_message", payload);
-      }
-    } catch (err) {
-      console.error("❌ Failed to save message:", err.message);
-    }
-  });
-
-  // ---------------- DELETE MESSAGE ----------------
-  socket.on("delete_message", async ({ messageId, sender, receiver }) => {
-    try {
-      await Message.findByIdAndDelete(messageId);
-
-      if (connectedUsers[sender]) {
-        io.to(connectedUsers[sender]).emit("message_deleted", messageId);
-      }
-
-      if (connectedUsers[receiver]) {
-        io.to(connectedUsers[receiver]).emit("message_deleted", messageId);
-      }
-    } catch (err) {
-      console.error("❌ Failed to delete message:", err.message);
-    }
-  });
-
-  // ---------------- DISCONNECT ----------------
-  socket.on("disconnect", () => {
-    const email = Object.keys(connectedUsers).find(
-      (e) => connectedUsers[e] === socket.id
-    );
-
-    if (email) delete connectedUsers[email];
-
-    console.log("🔴 Socket disconnected:", socket.id);
-  });
-});
+export default ChatBox;
