@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { IoSend, IoClose, IoTrash } from "react-icons/io5";
-import { FiMessageCircle } from "react-icons/fi";
+import { IoSend, IoClose } from "react-icons/io5";
 import io from "socket.io-client";
 
 const ADMIN_EMAIL = "rohitsahoo866@gmail.com";
@@ -9,7 +8,7 @@ const ADMIN_EMAIL = "rohitsahoo866@gmail.com";
 const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
+
   const chatEndRef = useRef(null);
   const socketRef = useRef(null);
 
@@ -19,59 +18,41 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   useEffect(() => {
     if (!userEmail) return;
 
-    // ✅ FIX: Correct Socket URL (NO /api/message)
-    socketRef.current = io("https://jbnet.onrender.com", {
-      withCredentials: true,
-      transports: ["websocket", "polling"],
+    // Create a fresh socket instance
+    socketRef.current = io("https://code-fsue.vercel.app", {
+      transports: ["websocket"],
     });
 
-    const socket = socketRef.current;
+    // Join room
+    socketRef.current.emit("join", { email: userEmail });
 
-    // join room
-    socket.emit("join", { email: userEmail });
-
-    // Fetch previous messages
-    const fetchMessages = async () => {
+    // Fetch previous chat
+    const loadChat = async () => {
       try {
         const sender = isAdmin ? ADMIN_EMAIL : userEmail;
         const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
 
         const res = await fetch(
-          `https://jbnet.onrender.com/api/messages?user1=${sender}&user2=${receiver}`
+          `https://code-fsue.vercel.app/api/messages?user1=${sender}&user2=${receiver}`
         );
-
         const data = await res.json();
-        setMessages(Array.isArray(data) ? data : []);
+        setMessages(data);
       } catch (err) {
         console.error("Chat load failed:", err);
-        setMessages([]);
       }
     };
 
-    fetchMessages();
+    loadChat();
 
-    // Receive new message
-    socket.on("receive_message", (msg) => {
-      const sender = isAdmin ? ADMIN_EMAIL : userEmail;
-      const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
-
-      if (
-        (msg.sender === sender && msg.receiver === receiver) ||
-        (msg.sender === receiver && msg.receiver === sender)
-      ) {
-        setMessages((prev) => [...prev, msg]);
-      }
+    // Listen for socket messages
+    socketRef.current.on("receive_message", (msg) => {
+      setMessages((prev) => [...prev, msg]);
     });
 
-    // Receive delete event
-    socket.on("message_deleted", (deletedId) => {
-      setMessages((prev) => prev.filter((msg) => msg._id !== deletedId));
-    });
-
+    // Remove listeners on unmount
     return () => {
-      socket.off("receive_message");
-      socket.off("message_deleted");
-      socket.disconnect();
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
     };
   }, [userEmail, isAdmin]);
 
@@ -79,76 +60,35 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Send message
   const handleSend = async () => {
     if (!newMessage.trim()) return;
 
     const sender = isAdmin ? ADMIN_EMAIL : userEmail;
     const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
 
-    const messageData = {
+    const msgData = {
       sender,
       receiver,
       message: newMessage.trim(),
     };
 
-    try {
-      const response = await fetch("https://jbnet.onrender.com/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(messageData),
-      });
+    // Send to backend socket
+    socketRef.current.emit("send_message", msgData);
 
-      const savedMessage = await response.json();
-      setMessages((prev) => [...prev, savedMessage]);
-
-      // Send to socket
-      socketRef.current?.emit("send_message", savedMessage);
-
-      setNewMessage("");
-    } catch (err) {
-      console.error("Failed to send message:", err);
-    }
-  };
-
-  // Delete message
-  const handleDeleteMessage = async (messageId) => {
-    if (!window.confirm("Are you sure you want to delete this message?")) return;
-
-    try {
-      setIsDeleting(true);
-
-      await fetch(`https://jbnet.onrender.com/api/messages/${messageId}`, {
-        method: "DELETE",
-      });
-
-      const sender = isAdmin ? ADMIN_EMAIL : userEmail;
-      const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
-
-      socketRef.current?.emit("delete_message", {
-        messageId,
-        sender,
-        receiver,
-      });
-
-      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
-    } catch (err) {
-      console.error("Failed to delete message:", err);
-    } finally {
-      setIsDeleting(false);
-    }
+    // Clear input
+    setNewMessage("");
   };
 
   if (!userEmail) {
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-xl shadow-lg text-red-500 text-sm max-w-md">
-          <p className="mb-4">❌ Unable to identify user. Please login again.</p>
+        <div className="bg-white p-6 rounded shadow text-red-500 text-sm">
+          ❌ Unable to identify user. Please login again.
           <button
             onClick={onClose}
-            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="mt-4 block text-blue-600 hover:underline"
           >
-            Close Chat
+            Close
           </button>
         </div>
       </div>
@@ -156,127 +96,78 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center items-center sm:items-end sm:justify-end p-2 sm:p-6">
+    <div className="fixed inset-0 z-50">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       ></div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative w-full sm:w-[400px] max-w-[95vw] h-[90vh] sm:h-[520px] bg-white shadow-xl rounded-2xl flex flex-col overflow-hidden"
-      >
-        <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white px-4 py-3 flex justify-between items-center">
-          <div>
-            <span className="font-semibold text-sm tracking-wide block">
-              💬 {isAdmin ? `Chat with ${userEmail}` : "Chat with Admin"}
+      <div className="absolute sm:bottom-6 sm:right-6 bottom-1/2 left-1/2 sm:left-auto sm:translate-x-0 translate-x-[-50%] translate-y-1/2 sm:translate-y-0 z-50">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-[90vw] sm:w-[360px] h-[80vh] sm:h-[500px] bg-white shadow-2xl rounded-xl flex flex-col overflow-hidden"
+        >
+          <div className="bg-blue-600 text-white px-4 py-3 flex justify-between items-center">
+            <span className="font-medium text-sm">
+              💬 Chat {isAdmin ? `with ${userEmail}` : "with Admin"}
             </span>
-            <span className="text-xs opacity-80 block mt-1">
-              {isAdmin ? "Admin Mode" : "User Mode"}
-            </span>
+            <button onClick={onClose}>
+              <IoClose size={20} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-blue-700 rounded-full transition-colors"
-          >
-            <IoClose size={24} />
-          </button>
-        </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-4 bg-gradient-to-b from-gray-50 to-gray-100 space-y-3 text-sm scroll-smooth">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-4">
-              <div className="bg-gray-200 border-2 border-dashed rounded-full w-16 h-16 flex items-center justify-center mb-4">
-                <FiMessageCircle size={32} className="text-gray-400" />
-              </div>
-              <p className="text-gray-500">No messages yet</p>
-              <p className="text-gray-400 text-sm mt-2">
-                Start a conversation by sending your first message
-              </p>
-            </div>
-          ) : (
-            messages.map((msg) => {
-              const isSender =
-                msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail);
-
-              return (
+          <div className="flex-1 overflow-y-auto p-4 bg-blue-50 space-y-2 text-sm">
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex ${
+                  msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
+                    ? "justify-end"
+                    : "justify-start"
+                }`}
+              >
                 <div
-                  key={msg._id}
-                  className={`flex ${
-                    isSender ? "justify-end" : "justify-start"
+                  className={`max-w-[70%] px-3 py-2 rounded-lg shadow-sm ${
+                    msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
+                      ? "bg-green-500 text-white"
+                      : "bg-white text-gray-800 border"
                   }`}
                 >
-                  <div className="max-w-[85%]">
-                    <div
-                      className={`px-4 py-2 rounded-2xl shadow text-sm relative group ${
-                        isSender
-                          ? "bg-blue-500 text-white rounded-br-none"
-                          : "bg-white border text-gray-800 rounded-bl-none"
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap">{msg.message}</p>
-
-                      <div className="flex justify-between items-center mt-1">
-                        <p
-                          className={`text-[10px] opacity-70 ${
-                            isSender ? "text-blue-100" : "text-gray-500"
-                          }`}
-                        >
-                          {new Date(msg.timestamp).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-
-                        {(isAdmin || isSender) && (
-                          <button
-                            onClick={() => handleDeleteMessage(msg._id)}
-                            disabled={isDeleting}
-                            className={`ml-2 opacity-0 group-hover:opacity-70 transition-opacity ${
-                              isDeleting
-                                ? "cursor-not-allowed"
-                                : "hover:opacity-100"
-                            }`}
-                          >
-                            <IoTrash size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <p>{msg.message}</p>
+                  <p className="text-[10px] text-right mt-1 opacity-70">
+                    {new Date(msg.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
                 </div>
-              );
-            })
-          )}
+              </div>
+            ))}
 
-          <div ref={chatEndRef} />
-        </div>
+            <div ref={chatEndRef} />
+          </div>
 
-        <div className="border-t bg-white p-3 flex items-center gap-2">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Type your message..."
-            className="flex-1 px-3 py-3 text-sm border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
+          <div className="border-t bg-white p-3 flex items-center gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Type your message..."
+              className="flex-1 px-3 py-2 text-sm border rounded-md"
+            />
 
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={handleSend}
-            disabled={!newMessage.trim()}
-            className={`p-3 rounded-full ${
-              newMessage.trim()
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-gray-200 text-gray-400"
-            } transition-colors`}
-          >
-            <IoSend size={18} />
-          </motion.button>
-        </div>
-      </motion.div>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleSend}
+              className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700"
+            >
+              <IoSend size={18} />
+            </motion.button>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };
