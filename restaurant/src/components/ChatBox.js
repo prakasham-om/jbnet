@@ -3,14 +3,14 @@ import { motion } from "framer-motion";
 import { IoSend, IoClose } from "react-icons/io5";
 import io from "socket.io-client";
 
+const socket = io("https://code-fsue.vercel.app");
+
 const ADMIN_EMAIL = "rohitsahoo866@gmail.com";
 
 const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-
   const chatEndRef = useRef(null);
-  const socketRef = useRef(null);
 
   const storedUser = JSON.parse(localStorage.getItem("user"));
   const userEmail = isAdmin ? propUserEmail : storedUser?.email;
@@ -18,16 +18,9 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
   useEffect(() => {
     if (!userEmail) return;
 
-    // Create a fresh socket instance
-    socketRef.current = io("https://code-fsue.vercel.app", {
-      transports: ["websocket"],
-    });
+    socket.emit("join", { email: userEmail });
 
-    // Join room
-    socketRef.current.emit("join", { email: userEmail });
-
-    // Fetch previous chat
-    const loadChat = async () => {
+    const fetchMessages = async () => {
       try {
         const sender = isAdmin ? ADMIN_EMAIL : userEmail;
         const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
@@ -42,17 +35,15 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
       }
     };
 
-    loadChat();
+    fetchMessages();
 
-    // Listen for socket messages
-    socketRef.current.on("receive_message", (msg) => {
+    // Listen for incoming socket messages
+    socket.on("receive_message", (msg) => {
       setMessages((prev) => [...prev, msg]);
     });
 
-    // Remove listeners on unmount
     return () => {
-      socketRef.current.removeAllListeners();
-      socketRef.current.disconnect();
+      socket.off("receive_message");
     };
   }, [userEmail, isAdmin]);
 
@@ -60,22 +51,29 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!newMessage.trim()) return;
 
     const sender = isAdmin ? ADMIN_EMAIL : userEmail;
     const receiver = isAdmin ? userEmail : ADMIN_EMAIL;
 
-    const msgData = {
+    const messageData = {
       sender,
       receiver,
       message: newMessage.trim(),
     };
 
-    // Send to backend socket
-    socketRef.current.emit("send_message", msgData);
+    // Emit to socket
+    socket.emit("send_message", messageData);
 
-    // Clear input
+    // Optimistic UI
+    setMessages((prev) => [
+      ...prev,
+      {
+        ...messageData,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
     setNewMessage("");
   };
 
@@ -118,33 +116,36 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 bg-blue-50 space-y-2 text-sm">
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex ${
-                  msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
-                    ? "justify-end"
-                    : "justify-start"
-                }`}
-              >
+            {messages.length === 0 ? (
+              <p className="text-center text-gray-500 italic">No messages yet.</p>
+            ) : (
+              messages.map((msg, idx) => (
                 <div
-                  className={`max-w-[70%] px-3 py-2 rounded-lg shadow-sm ${
+                  key={idx}
+                  className={`flex ${
                     msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
-                      ? "bg-green-500 text-white"
-                      : "bg-white text-gray-800 border"
+                      ? "justify-end"
+                      : "justify-start"
                   }`}
                 >
-                  <p>{msg.message}</p>
-                  <p className="text-[10px] text-right mt-1 opacity-70">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                  <div
+                    className={`max-w-[70%] px-3 py-2 rounded-lg shadow-sm ${
+                      msg.sender === (isAdmin ? ADMIN_EMAIL : userEmail)
+                        ? "bg-green-500 text-white"
+                        : "bg-white text-gray-800 border"
+                    }`}
+                  >
+                    <p>{msg.message}</p>
+                    <p className="text-[10px] text-right mt-1 opacity-70">
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-
+              ))
+            )}
             <div ref={chatEndRef} />
           </div>
 
@@ -157,7 +158,6 @@ const ChatBox = ({ userEmail: propUserEmail, onClose, isAdmin = false }) => {
               placeholder="Type your message..."
               className="flex-1 px-3 py-2 text-sm border rounded-md"
             />
-
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={handleSend}
